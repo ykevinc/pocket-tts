@@ -46,7 +46,8 @@ rayon = "1.11.0"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 hf-hub.workspace = true
 memmap2.workspace = true
-sentencepiece = "0.13"
+# sentencepiece removed - causes protobuf conflict with onnxruntime
+# Using tokenizers crate's built-in SentencePiece support instead
 tokenizers = { workspace = true, features = ["onig", "progressbar", "http"] }
 intel-mkl-src.workspace = true
 
