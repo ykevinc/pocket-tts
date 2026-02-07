@@ -25,6 +25,8 @@ pub fn sdpa(
     context_window: Option<usize>,
 ) -> Result<Tensor> {
     let q = q.contiguous()?;
+    let k = k.contiguous()?;
+    let v = v.contiguous()?;
     let (_b, _h, q_len, _dim) = q.dims4()?;
     let kv_len = k.dims()[2];
 
@@ -61,7 +63,7 @@ pub fn sdpa(
         };
 
         let probs = candle_nn::ops::softmax(&scores, D::Minus1)?;
-        return probs.matmul(v);
+        return probs.matmul(&v);
     }
 
     // Tiled path for large Q
@@ -100,7 +102,7 @@ pub fn sdpa(
         let probs = candle_nn::ops::softmax(&scores, D::Minus1)?;
 
         // Output chunk: [B, H, Block, D] = [B, H, Block, S] @ [B, H, S, D]
-        let out_chunk = probs.matmul(v)?;
+        let out_chunk = probs.matmul(&v)?;
 
         outputs.push(out_chunk);
     }
@@ -174,6 +176,16 @@ pub fn sdpa_chunked(
     let q = q.contiguous()?;
     let (b, h, q_len, d) = q.dims4()?;
 
+    // Ensure all KV chunks are contiguous for CPU matmul compatibility
+    let k_chunks: Vec<Tensor> = k_chunks
+        .iter()
+        .map(|t| t.contiguous())
+        .collect::<Result<_>>()?;
+    let v_chunks: Vec<Tensor> = v_chunks
+        .iter()
+        .map(|t| t.contiguous())
+        .collect::<Result<_>>()?;
+
     // Fast path for single chunk
     if k_chunks.len() == 1 {
         let k_t = k_chunks[0].transpose(2, 3)?.contiguous()?;
@@ -246,7 +258,7 @@ pub fn sdpa_chunked(
     for v_chunk in v_chunks {
         let chunk_len = v_chunk.dims()[2];
         let probs_chunk = probs.narrow(3, offset, chunk_len)?;
-        let out_chunk = probs_chunk.matmul(v_chunk)?;
+        let out_chunk = probs_chunk.matmul(&v_chunk)?;
         output = (output + out_chunk)?;
         offset += chunk_len;
     }
