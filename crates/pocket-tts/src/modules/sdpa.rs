@@ -34,7 +34,7 @@ pub fn sdpa(
     // Benchmark showed naive is faster for Q=1 and comparable for Q=50/64.
     const TILING_THRESHOLD: usize = 512;
 
-    let k_t = k.transpose(2, 3)?; // [B, H, D, S]
+    let k_t = k.transpose(2, 3)?.contiguous()?; // [B, H, D, S]
 
     if q_len < TILING_THRESHOLD {
         // Naive path (no tiling)
@@ -176,7 +176,7 @@ pub fn sdpa_chunked(
 
     // Fast path for single chunk
     if k_chunks.len() == 1 {
-        let k_t = k_chunks[0].transpose(2, 3)?;
+        let k_t = k_chunks[0].transpose(2, 3)?.contiguous()?;
         let scores = (q.matmul(&k_t)? * scale)?;
 
         let masked_scores = if is_causal || context_window.is_some() {
@@ -208,7 +208,7 @@ pub fn sdpa_chunked(
 
     for k_chunk in k_chunks {
         total_kv_len += k_chunk.dims()[2];
-        let k_t = k_chunk.transpose(2, 3)?;
+        let k_t = k_chunk.transpose(2, 3)?.contiguous()?;
         let score_chunk = (q.matmul(&k_t)? * scale)?;
         score_chunks.push(score_chunk);
     }
